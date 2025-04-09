@@ -1,0 +1,605 @@
+//---------------------------------------------------------------------------
+#include <stdio.h>
+#include <fstream>  //讀檔
+#include <vcl.h>
+#pragma hdrstop
+using namespace std;   // Add this statement for using "cin"/"cout"
+#include "MazeAndMouse.h"
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+#pragma resource "*.dfm"
+
+#define S 4           // 四個迷宮開鑿方向
+#define DIR 8         // 八個老鼠行走方向
+
+int width, height;    // 迷宮大小
+
+struct position{      // 迷宮開鑿位置
+	int x, y;
+};
+
+struct cood{
+	int dx, dy;
+};
+
+struct mouse{      //老鼠的下一格
+	int x, y;
+	int dir;
+};
+
+
+struct mouse *mousestack;
+int top2 = -1;
+void pushing(struct mouse m){
+	if (top2 >= width * height -1) {
+		ShowMessage("Stack is full !");
+	}
+	else{
+		mousestack[++top2] = m;
+	}
+}
+
+struct mouse popping(){
+	if (top2 == -1) {
+		ShowMessage("Stack is empty !");
+	}
+	else{
+		return mousestack[top2--];
+    }
+}
+
+int top = -1;
+struct position *stack;
+int** maze;
+
+TForm1 *Form1;
+//---------------------------------------------------------------------------
+__fastcall TForm1::TForm1(TComponent* Owner)
+	: TForm(Owner)
+{
+
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::Edit1Change(TObject *Sender)
+{
+	width = StrToInt(Edit1->Text);
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::Edit2Change(TObject *Sender)
+{
+	height = StrToInt(Edit2->Text);
+}
+//---------------------------------------------------------------------------
+
+struct cood f1[S] = {{0,1}, {-1,0}, {0,-1}, {1,0}}; // 打通牆壁
+struct cood f2[S] = {{0,2}, {-2,0}, {0,-2}, {2,0}}; // 移動到新位置
+struct cood f3[DIR] = {{0,1}, {-1,0}, {0,-1}, {1,0}, {-1,-1}, {-1,1}, {1,-1}, {1,1}};  // mouse
+
+void push(struct position p){
+	if (top == width * height -1) {
+		ShowMessage("Stack is full !");
+	}
+	else{
+		stack[++top] = p;
+	}
+}
+
+struct position pop(){
+	if (top == -1) {
+		ShowMessage("Stack is empty !");
+	}
+	else{
+		return stack[top--];
+    }
+}
+
+void initializeMaze()
+{       // 初始化迷宮為全1
+	maze = new int* [height];
+	for (int i = 0; i < height; i++) {
+		maze[i] = new int[width];
+		for (int j = 0; j < width; j++) {
+			if (i==0 || j==0 || i==height-1 || j==width-1 ){
+				maze[i][j] = 2;
+
+				Form1->StringGrid1->Cells[j][i]=2;   //stringgrid index是col, row
+				Form1->StringGrid2->Cells[j][i]=2;
+				Form1->StringGrid3->Cells[j][i]=2;
+			}
+			else{
+				maze[i][j] = 1;
+
+				Form1->StringGrid1->Cells[j][i]=1;   //stringgrid index是col, row
+				Form1->StringGrid2->Cells[j][i]=1;
+				Form1->StringGrid3->Cells[j][i]=1;
+			}
+		}
+	}
+	stack =  new struct position[height * width];
+
+	if (Form1->CheckBox2->Checked == true)
+	{
+		Form1->StringGrid1->Refresh();
+		Form1->StringGrid2->Refresh();
+		Form1->StringGrid3->Refresh();
+
+	}
+}
+
+int nextmove(struct position next)
+{
+	for (int i = 0; i < S; i++) {
+		int nx = next.x + f2[i].dx;
+		int ny = next.y + f2[i].dy;
+		if (nx>0 && nx<height && ny>0 && ny<width && maze[nx][ny] == 1) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void MazeDFS(struct position step)
+{
+	push(step);
+	maze[step.x][step.y] = 0; //起點
+
+	while(top != -1)
+	{
+		step = pop();
+		while (nextmove(step))
+		{
+			int d = rand() % S; //隨機方向
+			struct position next;
+			next.x = step.x + f2[d].dx;
+			next.y = step.y + f2[d].dy;
+
+			if (next.x>0 && next.x <height && next.y>0 && next.y < width && maze[next.x][next.y]==1) {
+				// 打通牆壁
+				maze[step.x + f1[d].dx][step.y + f1[d].dy] = 0;
+
+				Form1->StringGrid1->Cells[step.y + f1[d].dy][step.x + f1[d].dx]=0;   //stringgrid index是col, row
+				Form1->StringGrid2->Cells[step.y + f1[d].dy][step.x + f1[d].dx]=0;
+				Form1->StringGrid3->Cells[step.y + f1[d].dy][step.x + f1[d].dx]=0;
+
+				push(next);
+				maze[next.x][next.y] = 0;    //成為通道
+				step = next;     // 更新目前位置
+
+				Form1->StringGrid1->Cells[next.y][next.x]=0;   //stringgrid index是col, row
+				Form1->StringGrid2->Cells[next.y][next.x]=0;
+				Form1->StringGrid3->Cells[next.y][next.x]=0;
+
+				if (Form1->CheckBox2->Checked == true)
+				{
+					Form1->StringGrid1->Refresh();
+					Form1->StringGrid2->Refresh();
+					Form1->StringGrid3->Refresh();
+					Sleep(Form1->TrackBar1->Position);
+				}
+
+			}
+		}
+
+
+    }
+}
+void printMaze(){
+	AnsiString printOut;
+	for(int i=0;i<height;i++)
+	{
+		printOut = "";
+		for(int j=0;j<width;j++)
+		{
+			printOut += "\t"+IntToStr(maze[i][j]);
+			Form1->StringGrid1->Cells[j][i] = maze[i][j];
+			Form1->StringGrid2->Cells[j][i] = maze[i][j];
+			Form1->StringGrid3->Cells[j][i] = maze[i][j];
+		}
+		Form1->Memo1->Lines->Add(printOut);
+    }
+}
+
+// 釋放記憶體
+void freeMaze() {
+    for (int i = 0; i < height; i++) {
+        delete[] maze[i];
+    }
+    delete[] maze;
+    delete[] stack;
+}
+
+
+void __fastcall TForm1::Button3Click(TObject *Sender)   // create maze
+{
+
+	if (Form1->CheckBox2) DoubleBuffered = true;
+	else DoubleBuffered = false;
+
+	if (width % 2 == 0) {
+		width++;
+	}
+	if (height % 2 == 0) {
+        height++;
+	}
+
+	StringGrid1->ColCount = width;
+	StringGrid1->RowCount = height;
+
+	StringGrid2->ColCount = width;
+	StringGrid2->RowCount = height;
+
+	StringGrid3->ColCount = width;
+	StringGrid3->RowCount = height;
+
+	int GridSize = StrToInt(Edit3->Text);
+	for (int i=0; i<height; i++) StringGrid1->RowHeights[i] = GridSize;
+	for (int i=0; i<width; i++) StringGrid1->ColWidths[i] = GridSize;
+
+	for (int i=0; i<height; i++) StringGrid2->RowHeights[i] = GridSize;
+	for (int i=0; i<width; i++) StringGrid2->ColWidths[i] = GridSize;
+
+	for (int i=0; i<height; i++) StringGrid3->RowHeights[i] = GridSize;
+	for (int i=0; i<width; i++) StringGrid3->ColWidths[i] = GridSize;
+
+	initializeMaze(); // 初始化迷宮為全1
+	struct position start = {1,1};
+	MazeDFS(start);
+
+	maze[1][0] =0;
+	maze[height-2][width-1] =0;
+	// print maze
+	AnsiString printSize, printOut;
+	printSize = "Maze: "+IntToStr(width)+"X"+IntToStr(height);
+	Form1->Memo1->Lines->Add(printSize);
+
+	printMaze();
+	StringGrid1->Refresh();
+	StringGrid2->Refresh();
+    StringGrid3->Refresh();
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::Button4Click(TObject *Sender)  // mouse in maze
+{
+	 if (Form1->CheckBox1) DoubleBuffered = true;
+	 else DoubleBuffered = false;
+
+	 maze[1][0] = 3;
+     Form1->Memo1->Lines->Add("Mouse at Maze (1,0)");
+	 Form1->StringGrid1->Cells[0][1]=3;         //stringgrid index是col, row
+	 Form1->StringGrid2->Cells[0][1]=3;
+	 Form1->StringGrid3->Cells[0][1]=3;
+	 if (Form1->CheckBox1->Checked == true)
+	 {
+		Form1->StringGrid1->Refresh();
+		Form1->StringGrid2->Refresh();
+		Form1->StringGrid3->Refresh();
+		Sleep(Form1->TrackBar1->Position);
+	 }
+
+	 struct mouse step;
+	 bool found = false;
+	 mousestack = new struct mouse[width * height];
+	 int i, j, u, v;
+	 step.x = 1;
+	 step.y = 1;
+	 step.dir = 0;
+	 pushing(step);
+
+	 maze[1][1] = 3;
+	 Form1->Memo1->Lines->Add("Mouse at Maze (1,1)");
+	 Form1->StringGrid1->Cells[1][1]=3;
+	 Form1->StringGrid2->Cells[1][1]=3;
+	 Form1->StringGrid3->Cells[1][1]=3;
+	 if (Form1->CheckBox1->Checked == true)
+	 {
+		Form1->StringGrid1->Refresh();
+		Form1->StringGrid2->Refresh();
+		Form1->StringGrid3->Refresh();
+		Sleep(Form1->TrackBar1->Position);
+	 }
+
+	 while(top2 != -1)
+	 {
+		 step = popping();
+		 i = step.x ; j= step.y; step.dir=step.dir;
+		 while (step.dir < DIR  && !found)
+		 {
+			  u=i+f3[step.dir].dx;
+			  v=j+f3[step.dir].dy;      //自(i,j)欲嘗試的下一步座標
+			  if (u >= 0 && u < height && v >= 0 && v < width && maze[u][v] == 0)
+			  {
+
+
+				  maze[u][v] = 3;
+
+				  Form1->StringGrid1->Cells[v][u]=3;
+				  Form1->StringGrid2->Cells[v][u]=3;
+				  Form1->StringGrid3->Cells[v][u]=3;
+
+				  if (Form1->CheckBox1->Checked == true)
+				  {
+						Form1->StringGrid1->Refresh();
+						Form1->StringGrid2->Refresh();
+						Form1->StringGrid3->Refresh();
+						Sleep(Form1->TrackBar1->Position);
+				  }
+				  Form1->Memo1->Lines->Add("Mouse at Maze ("+IntToStr(u)+", "+IntToStr(v)+")");
+
+
+				  step.x = i;
+				  step.y = j;
+				  step.dir++;
+				  pushing(step);
+				  if (u == height - 2 && v == width - 1)      // 檢查是否抵達出口
+				  {
+						found = true;  // 標記已找到出口
+
+						// 標記起點和終點
+						maze[1][0] = 4;  // 入口
+						maze[height - 2][width - 1] = 4;  // 出口
+						Form1->StringGrid1->Cells[width - 1][height - 2]=4;
+						Form1->StringGrid2->Cells[width - 1][height - 2]=4;
+						Form1->StringGrid3->Cells[width - 1][height - 2]=4;
+
+						if (Form1->CheckBox1->Checked == true)
+						{
+							Form1->StringGrid1->Refresh();
+							Form1->StringGrid2->Refresh();
+							Form1->StringGrid3->Refresh();
+							//Form1->StringGrid4->Refresh();
+							Sleep(Form1->TrackBar1->Position);
+						}
+
+						// 將堆疊內的所有元素pop輸出，並將路徑標記為4
+						// 將stack內的所有元素pop輸出,則構成一條由出口至入口的路徑
+						while (top2 != -1)
+						{
+							struct mouse path_step = popping();
+							maze[path_step.x][path_step.y] = 4;  // 標記路徑為4
+
+							Form1->StringGrid1->Cells[path_step.y][path_step.x]=4;
+							Form1->StringGrid2->Cells[path_step.y][path_step.x]=4;
+							Form1->StringGrid3->Cells[path_step.y][path_step.x]=4;
+
+							if (Form1->CheckBox1->Checked == true)
+							{
+								Form1->StringGrid1->Refresh();
+								Form1->StringGrid2->Refresh();
+								Form1->StringGrid3->Refresh();
+								;
+								Sleep(Form1->TrackBar1->Position);
+							}
+
+						}
+
+
+						delete[] mousestack;
+						break;
+
+				  }
+				  i = u;
+				  j = v;
+				  step.x = i;
+				  step.y = j;
+				  step.dir = 0;
+			  }
+			  else
+			  {
+				  step.dir++;
+			  }
+
+		 }
+
+	 }
+
+	 Memo1->Lines->Add("\n");
+	 printMaze();
+	 freeMaze();
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::StringGrid2DrawCell(TObject *Sender, System::LongInt ACol,
+          System::LongInt ARow, TRect &Rect, TGridDrawState State)
+{
+	AnsiString text = StringGrid2->Cells[ACol][ARow];
+	if (text == "0")         //空白
+		StringGrid2->Canvas->Brush->Color = (TColor)RGB(216, 210, 194);
+	else if(text == "1")     // 牆壁
+		StringGrid2->Canvas->Brush->Color = (TColor)RGB(130, 91, 50);
+	else if(text == "2")     // 外圍圍牆
+		StringGrid2->Canvas->Brush->Color = (TColor)RGB(59, 48, 48);
+	else if(text == "3")    // 走過的路
+		StringGrid2->Canvas->Brush->Color = (TColor)RGB(203, 163, 92);
+	else if(text == "4")   //  返回捷徑
+		StringGrid2->Canvas->Brush->Color = (TColor)RGB(255, 201, 74);
+	else if(text == "5")       //自行遊玩模式之當前位置
+		StringGrid2->Canvas->Brush->Color = (TColor)RGB(0,0,0);
+
+	StringGrid2->Canvas->FillRect(Rect);
+}
+//---------------------------------------------------------------------------
+
+
+void __fastcall TForm1::Button5Click(TObject *Sender)  // self gaming
+{
+	this->Button3Click(this); // create new maze
+	int curX = 1, curY = 0;
+
+	// 清除舊位置
+    if (maze != nullptr) {
+		maze[curX][curY] = 5;
+		StringGrid2->Cells[curY][curX] = "5";
+		StringGrid3->Cells[curY][curX] = "5";
+	}
+
+	// 啟用鍵盤輸入
+	KeyPreview = true;
+	SetFocus();
+	StringGrid2->Repaint();
+	StringGrid3->Repaint();
+}
+//---------------------------------------------------------------------------
+
+
+void __fastcall TForm1::FormKeyDown(TObject *Sender, WORD &Key, TShiftState Shift)
+
+{
+	// 找尋當前玩家位置 find("5")
+	int curX = -1, curY = -1;
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+			if (StringGrid2->Cells[j][i] == "5") {
+				curX = i;
+				curY = j;
+				break;
+			}
+			if (StringGrid3->Cells[j][i] == "5") {
+				curX = i;
+				curY = j;
+				break;
+			}
+		}
+	}
+
+    int newX = curX;
+    int newY = curY;
+
+    // 處理按鍵
+    switch(Key)
+    {
+        case 'W': case VK_UP:    newX--; break;
+        case 'A': case VK_LEFT:  newY--; break;
+        case 'S': case VK_DOWN:  newX++; break;
+        case 'D': case VK_RIGHT: newY++; break;
+		default: return;  // 忽略非移動按鍵
+    }
+
+    // 檢查新位置是否有效
+    if (newX >= 0 && newX < height && newY >= 0 && newY < width &&
+        (maze[newX][newY] == 0 || (newX == height-2 && newY == width-1)))
+    {
+        // 更新位置
+        maze[curX][curY] = 0;
+		StringGrid2->Cells[curY][curX] = "0";
+		StringGrid3->Cells[curY][curX] = "0";
+
+        maze[newX][newY] = 5;
+		StringGrid2->Cells[newY][newX] = "5";
+		StringGrid2->Repaint();
+		StringGrid3->Cells[newY][newX] = "5";
+		StringGrid3->Repaint();
+
+        if (newX == height-2 && newY == width-1) {
+			ShowMessage("WELL DONE!");
+        }
+    }
+}
+//---------------------------------------------------------------------------
+
+
+void __fastcall TForm1::StringGrid3DrawCell(TObject *Sender, System::LongInt ACol,
+          System::LongInt ARow, TRect &Rect, TGridDrawState State)
+{
+	StringGrid3->GridLineWidth = 0;
+	AnsiString text = StringGrid3->Cells[ACol][ARow];
+	if (text == "0")         //空白
+		StringGrid3->Canvas->Brush->Color = (TColor)RGB(255, 245, 215);
+	else if(text == "1")     // 牆壁
+		StringGrid3->Canvas->Brush->Color = (TColor)RGB(8, 194, 255);
+	else if(text == "2")     // 外圍圍牆
+		StringGrid3->Canvas->Brush->Color = (TColor)RGB(0, 107, 255);
+	else if(text == "3")    // 走過的路
+		StringGrid3->Canvas->Brush->Color = (TColor)RGB(188, 242, 246);
+	else if(text == "4")   //  返回捷徑
+		StringGrid3->Canvas->Brush->Color = (TColor)RGB(255, 241, 0);
+	else if(text == "5")       //自行遊玩模式之當前位置
+		StringGrid3->Canvas->Brush->Color = (TColor)RGB(0,0,0);
+
+	StringGrid3->Canvas->FillRect(Rect);
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TForm1::Button1Click(TObject *Sender) // input
+{
+	// Prepare at least 3 text files for different mazes
+	//where the size of one of them should be larger than 15*15.
+    TOpenDialog *OpenDialog = new TOpenDialog(NULL);
+	OpenDialog->Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*";
+	OpenDialog->Title = "Select a file to open";
+
+    if (OpenDialog->Execute()) {
+		string filePath = AnsiString(OpenDialog->FileName).c_str(); // 取得檔案路徑
+		ifstream inFile(filePath);
+        if (!inFile) {
+            ShowMessage("Error: Cannot open file.");
+		} else {
+			inFile >> height >> width; // 讀取迷宮大小
+			maze = new int *[height];
+
+			StringGrid1->ColCount = width;
+			StringGrid1->RowCount = height;
+
+			StringGrid2->ColCount = width;
+			StringGrid2->RowCount = height;
+
+			StringGrid3->ColCount = width;
+			StringGrid3->RowCount = height;
+
+			int GridSize = 25;
+			for (int i=0; i<height; i++) StringGrid1->RowHeights[i] = GridSize;
+			for (int i=0; i<width; i++) StringGrid1->ColWidths[i] = GridSize;
+
+			for (int i=0; i<height; i++) StringGrid2->RowHeights[i] = GridSize;
+			for (int i=0; i<width; i++) StringGrid2->ColWidths[i] = GridSize;
+
+			for (int i=0; i<height; i++) StringGrid3->RowHeights[i] = GridSize;
+			for (int i=0; i<width; i++) StringGrid3->ColWidths[i] = GridSize;
+
+			AnsiString s;  // 將輸出寫入 Form1
+
+			for (int i = 0; i < height; i++) {
+				maze[i] = new int[width];
+				s = "";
+				for (int j = 0; j < width; j++) {
+					inFile >> maze[i][j];
+					s = s + IntToStr(maze[i][j]) + " ";
+					Form1->StringGrid1->Cells[j][i] = maze[i][j];
+					Form1->StringGrid2->Cells[j][i] = maze[i][j];
+					Form1->StringGrid3->Cells[j][i] = maze[i][j];
+				}
+				Form1->Memo1->Lines->Add(s);
+			}
+		}
+        inFile.close();
+    }
+
+	delete OpenDialog;
+
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TForm1::Button2Click(TObject *Sender)   // output
+{
+
+	int m, n, i, j;
+	String s;
+
+
+	freopen("out.txt", "w", stdout);
+
+	cout << height << " " << width << endl;
+
+	for (int i = 0; i < height; i++) {
+		for (int j = 0; j < width; j++) {
+            cout << maze[i][j] << " ";
+        }
+        cout << endl;
+    }
+
+    fclose(stdout);
+	cout.clear();
+	ShowMessage("迷宮存取完成，檔名： out.txt");
+
+}
+//---------------------------------------------------------------------------
+
+
